@@ -19,25 +19,12 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.Transformations
 import io.github.muntashirakon.music.*
 import io.github.muntashirakon.music.db.*
+import io.github.muntashirakon.music.fragments.search.Filter
 import io.github.muntashirakon.music.model.*
 import io.github.muntashirakon.music.model.smartplaylist.NotPlayedPlaylist
-import io.github.muntashirakon.music.network.LastFMService
-import io.github.muntashirakon.music.network.Result
-import io.github.muntashirakon.music.network.Result.*
-import io.github.muntashirakon.music.network.model.LastFmAlbum
-import io.github.muntashirakon.music.network.model.LastFmArtist
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.flow
+import io.github.muntashirakon.music.util.PreferenceUtil
 
 interface Repository {
-
-    fun songsFlow(): Flow<Result<List<Song>>>
-    fun albumsFlow(): Flow<Result<List<Album>>>
-    fun artistsFlow(): Flow<Result<List<Artist>>>
-    fun playlistsFlow(): Flow<Result<List<Playlist>>>
-    fun genresFlow(): Flow<Result<List<Genre>>>
     fun historySong(): List<HistoryEntity>
     fun favorites(): LiveData<List<SongEntity>>
     fun observableHistorySongs(): LiveData<List<Song>>
@@ -50,12 +37,11 @@ interface Repository {
     suspend fun albumArtists(): List<Artist>
     suspend fun fetchLegacyPlaylist(): List<Playlist>
     suspend fun fetchGenres(): List<Genre>
-    suspend fun search(query: String?): MutableList<Any>
+    suspend fun search(query: String?, filter: Filter): MutableList<Any>
     suspend fun getPlaylistSongs(playlist: Playlist): List<Song>
     suspend fun getGenre(genreId: Long): List<Song>
-    suspend fun artistInfo(name: String, lang: String?, cache: String?): Result<LastFmArtist>
-    suspend fun albumInfo(artist: String, album: String): Result<LastFmAlbum>
     suspend fun artistById(artistId: Long): Artist
+    suspend fun albumArtistByName(name: String): Artist
     suspend fun recentArtists(): List<Artist>
     suspend fun topArtists(): List<Artist>
     suspend fun topAlbums(): List<Album>
@@ -66,10 +52,11 @@ interface Repository {
     suspend fun recentAlbumsHome(): Home
     suspend fun favoritePlaylistHome(): Home
     suspend fun suggestionsHome(): Home
+    suspend fun suggestions(): List<Song>
     suspend fun genresHome(): Home
     suspend fun playlists(): Home
     suspend fun homeSections(): List<Home>
-    suspend fun homeSectionsFlow(): Flow<Result<List<Home>>>
+
     suspend fun playlist(playlistId: Long): Playlist
     suspend fun fetchPlaylistWithSongs(): List<PlaylistWithSongs>
     suspend fun playlistSongs(playlistWithSongs: PlaylistWithSongs): List<Song>
@@ -93,19 +80,22 @@ interface Repository {
     suspend fun insertSongInPlayCount(playCountEntity: PlayCountEntity)
     suspend fun updateSongInPlayCount(playCountEntity: PlayCountEntity)
     suspend fun deleteSongInPlayCount(playCountEntity: PlayCountEntity)
+    suspend fun deleteSongInHistory(songId: Long)
+    suspend fun clearSongHistory()
     suspend fun checkSongExistInPlayCount(songId: Long): List<PlayCountEntity>
     suspend fun playCountSongs(): List<PlayCountEntity>
     suspend fun blackListPaths(): List<BlackListStoreEntity>
     suspend fun deleteSongs(songs: List<Song>)
-    suspend fun contributor(): List<Contributor>
     suspend fun searchArtists(query: String): List<Artist>
     suspend fun searchSongs(query: String): List<Song>
     suspend fun searchAlbums(query: String): List<Album>
+    suspend fun isSongFavorite(songId: Long): Boolean
+    fun getSongByGenre(genreId: Long): Song
+    fun checkPlaylistExists(playListId: Long): LiveData<Boolean>
 }
 
 class RealRepository(
     private val context: Context,
-    private val lastFMService: LastFMService,
     private val songRepository: SongRepository,
     private val albumRepository: AlbumRepository,
     private val artistRepository: ArtistRepository,
@@ -115,17 +105,19 @@ class RealRepository(
     private val searchRepository: RealSearchRepository,
     private val topPlayedRepository: TopPlayedRepository,
     private val roomRepository: RoomRepository,
-    private val localDataRepository: LocalDataRepository
 ) : Repository {
 
 
     override suspend fun deleteSongs(songs: List<Song>) = roomRepository.deleteSongs(songs)
 
-    override suspend fun contributor(): List<Contributor> = localDataRepository.contributors()
-
     override suspend fun searchSongs(query: String): List<Song> = songRepository.songs(query)
 
     override suspend fun searchAlbums(query: String): List<Album> = albumRepository.albums(query)
+
+    override suspend fun isSongFavorite(songId: Long): Boolean =
+        roomRepository.isSongFavorite(context, songId)
+
+    override fun getSongByGenre(genreId: Long): Song = genreRepository.song(genreId)
 
     override suspend fun searchArtists(query: String): List<Artist> =
         artistRepository.artists(query)
@@ -142,6 +134,9 @@ class RealRepository(
 
     override suspend fun artistById(artistId: Long): Artist = artistRepository.artist(artistId)
 
+    override suspend fun albumArtistByName(name: String): Artist =
+        artistRepository.albumArtist(name)
+
     override suspend fun recentArtists(): List<Artist> = lastAddedRepository.recentArtists()
 
     override suspend fun recentAlbums(): List<Album> = lastAddedRepository.recentAlbums()
@@ -156,8 +151,8 @@ class RealRepository(
 
     override suspend fun allSongs(): List<Song> = songRepository.songs()
 
-    override suspend fun search(query: String?): MutableList<Any> =
-        searchRepository.searchAll(context, query)
+    override suspend fun search(query: String?, filter: Filter): MutableList<Any> =
+        searchRepository.searchAll(context, query, filter)
 
     override suspend fun getPlaylistSongs(playlist: Playlist): List<Song> =
         if (playlist is AbsCustomPlaylist) {
@@ -168,69 +163,14 @@ class RealRepository(
 
     override suspend fun getGenre(genreId: Long): List<Song> = genreRepository.songs(genreId)
 
-    override suspend fun artistInfo(
-        name: String,
-        lang: String?,
-        cache: String?
-    ): Result<LastFmArtist> {
-        return try {
-            Success(lastFMService.artistInfo(name, lang, cache))
-        } catch (e: Exception) {
-            println(e)
-            Error(e)
-        }
-    }
-
-    override suspend fun albumInfo(
-        artist: String,
-        album: String
-    ): Result<LastFmAlbum> {
-        return try {
-            val lastFmAlbum = lastFMService.albumInfo(artist, album)
-            Success(lastFmAlbum)
-        } catch (e: Exception) {
-            println(e)
-            Error(e)
-        }
-    }
-
-    @ExperimentalCoroutinesApi
-    override suspend fun homeSectionsFlow(): Flow<Result<List<Home>>> {
-        val homes = MutableStateFlow<Result<List<Home>>>(value = Loading)
-        val homeSections = mutableListOf<Home>()
-        val sections = listOf(
-            topArtistsHome(),
-            topAlbumsHome(),
-            recentArtistsHome(),
-            recentAlbumsHome(),
-            suggestionsHome(),
-            favoritePlaylistHome(),
-            genresHome()
-        )
-        for (section in sections) {
-            if (section.arrayList.isNotEmpty()) {
-                println("${section.homeSection} -> ${section.arrayList.size}")
-                homeSections.add(section)
-            }
-        }
-        if (homeSections.isEmpty()) {
-            homes.value = Error(Exception(Throwable("No items")))
-        } else {
-            homes.value = Success(homeSections)
-        }
-        return homes
-    }
-
     override suspend fun homeSections(): List<Home> {
         val homeSections = mutableListOf<Home>()
         val sections: List<Home> = listOf(
-            suggestionsHome(),
             topArtistsHome(),
             topAlbumsHome(),
             recentArtistsHome(),
             recentAlbumsHome(),
             favoritePlaylistHome()
-            // genresHome()
         )
         for (section in sections) {
             if (section.arrayList.isNotEmpty()) {
@@ -260,6 +200,9 @@ class RealRepository(
 
     override suspend fun checkPlaylistExists(playlistName: String): List<PlaylistEntity> =
         roomRepository.checkPlaylistExists(playlistName)
+
+    override fun checkPlaylistExists(playListId: Long): LiveData<Boolean> =
+        roomRepository.checkPlaylistExists(playListId)
 
     override suspend fun createPlaylist(playlistEntity: PlaylistEntity): Long =
         roomRepository.createPlaylist(playlistEntity)
@@ -312,6 +255,13 @@ class RealRepository(
     override suspend fun deleteSongInPlayCount(playCountEntity: PlayCountEntity) =
         roomRepository.deleteSongInPlayCount(playCountEntity)
 
+    override suspend fun deleteSongInHistory(songId: Long) =
+        roomRepository.deleteSongInHistory(songId)
+
+    override suspend fun clearSongHistory() {
+        roomRepository.clearSongHistory()
+    }
+
     override suspend fun checkSongExistInPlayCount(songId: Long): List<PlayCountEntity> =
         roomRepository.checkSongExistInPlayCount(songId)
 
@@ -332,12 +282,32 @@ class RealRepository(
     override fun favorites(): LiveData<List<SongEntity>> =
         roomRepository.favoritePlaylistLiveData(context.getString(R.string.favorites))
 
+    var suggestions = Home(
+        listOf(), SUGGESTIONS,
+        R.string.suggestion_songs
+    )
+
     override suspend fun suggestionsHome(): Home {
-        val songs =
-            NotPlayedPlaylist().songs().shuffled().takeIf {
+        if (!PreferenceUtil.homeSuggestions) return Home(
+            listOf(),
+            SUGGESTIONS,
+            R.string.suggestion_songs
+        )
+        // Don't reload Suggestions everytime
+        if (suggestions.arrayList.isEmpty()) {
+            val songs = NotPlayedPlaylist().songs().shuffled().takeIf {
                 it.size > 9
             } ?: emptyList()
-        return Home(songs, SUGGESTIONS, R.string.suggestion_songs)
+            suggestions = Home(songs, SUGGESTIONS, R.string.suggestion_songs)
+        }
+        return suggestions
+    }
+
+    override suspend fun suggestions(): List<Song> {
+        if (!PreferenceUtil.homeSuggestions) return listOf()
+        return NotPlayedPlaylist().songs().shuffled().takeIf {
+            it.size > 9
+        } ?: emptyList()
     }
 
     override suspend fun genresHome(): Home {
@@ -377,53 +347,4 @@ class RealRepository(
         return Home(songs, FAVOURITES, R.string.favorites)
     }
 
-    override fun songsFlow(): Flow<Result<List<Song>>> = flow {
-        emit(Loading)
-        val data = songRepository.songs()
-        if (data.isEmpty()) {
-            emit(Error(Exception(Throwable("No items"))))
-        } else {
-            emit(Success(data))
-        }
-    }
-
-    override fun albumsFlow(): Flow<Result<List<Album>>> = flow {
-        emit(Loading)
-        val data = albumRepository.albums()
-        if (data.isEmpty()) {
-            emit(Error(Exception(Throwable("No items"))))
-        } else {
-            emit(Success(data))
-        }
-    }
-
-    override fun artistsFlow(): Flow<Result<List<Artist>>> = flow {
-        emit(Loading)
-        val data = artistRepository.artists()
-        if (data.isEmpty()) {
-            emit(Error(Exception(Throwable("No items"))))
-        } else {
-            emit(Success(data))
-        }
-    }
-
-    override fun playlistsFlow(): Flow<Result<List<Playlist>>> = flow {
-        emit(Loading)
-        val data = playlistRepository.playlists()
-        if (data.isEmpty()) {
-            emit(Error(Exception(Throwable("No items"))))
-        } else {
-            emit(Success(data))
-        }
-    }
-
-    override fun genresFlow(): Flow<Result<List<Genre>>> = flow {
-        emit(Loading)
-        val data = genreRepository.genres()
-        if (data.isEmpty()) {
-            emit(Error(Exception(Throwable("No items"))))
-        } else {
-            emit(Success(data))
-        }
-    }
 }

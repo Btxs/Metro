@@ -14,22 +14,17 @@
  */
 package io.github.muntashirakon.music.fragments.artists
 
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.liveData
-import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.*
 import io.github.muntashirakon.music.interfaces.IMusicServiceEventListener
 import io.github.muntashirakon.music.model.Artist
-import io.github.muntashirakon.music.network.Result
-import io.github.muntashirakon.music.network.model.LastFmArtist
 import io.github.muntashirakon.music.repository.RealRepository
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.launch
 
 class ArtistDetailsViewModel(
     private val realRepository: RealRepository,
-    private val artistId: Long
+    private val artistId: Long?,
+    private val artistName: String?
 ) : ViewModel(), IMusicServiceEventListener {
     private val artistDetails = MutableLiveData<Artist>()
 
@@ -39,24 +34,16 @@ class ArtistDetailsViewModel(
 
     private fun fetchArtist() {
         viewModelScope.launch(IO) {
-            artistDetails.postValue(realRepository.artistById(artistId))
+            artistId?.let { artistDetails.postValue(realRepository.artistById(it)) }
+
+            artistName?.let { artistDetails.postValue(realRepository.albumArtistByName(it)) }
         }
     }
 
     fun getArtist(): LiveData<Artist> = artistDetails
 
-    fun getArtistInfo(
-        name: String,
-        lang: String?,
-        cache: String?
-    ): LiveData<Result<LastFmArtist>> = liveData(IO) {
-        emit(Result.Loading)
-        val info = realRepository.artistInfo(name, lang, cache)
-        emit(info)
-    }
-
     override fun onMediaStoreChanged() {
-       fetchArtist()
+        fetchArtist()
     }
 
     override fun onServiceConnected() {}
@@ -66,4 +53,5 @@ class ArtistDetailsViewModel(
     override fun onPlayStateChanged() {}
     override fun onRepeatModeChanged() {}
     override fun onShuffleModeChanged() {}
+    override fun onFavoriteStateChanged() {}
 }

@@ -15,6 +15,7 @@
 package io.github.muntashirakon.music.lyrics;
 
 import android.animation.ValueAnimator;
+import android.annotation.SuppressLint;
 import android.text.TextUtils;
 import android.text.format.DateUtils;
 
@@ -211,7 +212,7 @@ class LrcUtils {
 
   static void resetDurationScale() {
     try {
-      Field mField = ValueAnimator.class.getDeclaredField("sDurationScale");
+      @SuppressLint({"SoonBlockedPrivateApi"}) Field mField = ValueAnimator.class.getDeclaredField("sDurationScale");
       mField.setAccessible(true);
       mField.setFloat(null, 1);
     } catch (Exception e) {

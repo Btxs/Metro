@@ -1,5 +1,8 @@
 package code.name.monkey.appthemehelper.common.prefs.supportv7;
 
+import android.annotation.SuppressLint;
+
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.DialogFragment;
 import androidx.preference.Preference;
@@ -12,8 +15,9 @@ import code.name.monkey.appthemehelper.common.prefs.supportv7.dialogs.ATEPrefere
  * @author Karim Abou Zeid (kabouzeid)
  */
 public abstract class ATEPreferenceFragmentCompat extends PreferenceFragmentCompat {
+    @SuppressLint("RestrictedApi")
     @Override
-    public void onDisplayPreferenceDialog(Preference preference) {
+    public void onDisplayPreferenceDialog(@NonNull Preference preference) {
         if (getCallbackFragment() instanceof OnPreferenceDisplayDialogCallback) {
             ((OnPreferenceDisplayDialogCallback) getCallbackFragment()).onPreferenceDisplayDialog(this, preference);
             return;
@@ -24,6 +28,7 @@ public abstract class ATEPreferenceFragmentCompat extends PreferenceFragmentComp
             return;
         }
 
+        assert getFragmentManager() != null;
         if (getFragmentManager().findFragmentByTag("androidx.preference.PreferenceFragment.DIALOG") == null) {
             DialogFragment dialogFragment = onCreatePreferenceDialog(preference);
 

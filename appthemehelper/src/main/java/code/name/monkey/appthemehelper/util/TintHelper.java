@@ -41,7 +41,7 @@ public final class TintHelper {
     @SuppressWarnings("JavaReflectionMemberAccess")
     public static void colorHandles(@NonNull TextView view, int color) {
         try {
-            Field editorField = TextView.class.getDeclaredField("mEditor");
+            @SuppressLint("DiscouragedPrivateApi") Field editorField = TextView.class.getDeclaredField("mEditor");
             if (!editorField.isAccessible()) {
                 editorField.setAccessible(true);
             }
@@ -115,10 +115,10 @@ public final class TintHelper {
 
     public static void setCursorTint(@NonNull EditText editText, @ColorInt int color) {
         try {
-            Field fCursorDrawableRes = TextView.class.getDeclaredField("mCursorDrawableRes");
+            @SuppressLint("SoonBlockedPrivateApi") Field fCursorDrawableRes = TextView.class.getDeclaredField("mCursorDrawableRes");
             fCursorDrawableRes.setAccessible(true);
             int mCursorDrawableRes = fCursorDrawableRes.getInt(editText);
-            Field fEditor = TextView.class.getDeclaredField("mEditor");
+            @SuppressLint("DiscouragedPrivateApi") Field fEditor = TextView.class.getDeclaredField("mEditor");
             fEditor.setAccessible(true);
             Object editor = fEditor.get(editText);
             Class<?> clazz = editor.getClass();
@@ -171,6 +171,7 @@ public final class TintHelper {
         }
     }
 
+    @SuppressLint("RestrictedApi")
     public static void setTint(@NonNull EditText editText, @ColorInt int color, boolean useDarker) {
         final ColorStateList editTextColorStateList = new ColorStateList(new int[][]{
                 new int[]{-android.R.attr.state_enabled},

@@ -60,9 +60,11 @@ public class ATEPreferenceDialogFragment extends DialogFragment implements Dialo
         }
     }
 
+    @Override
     @NonNull
     public Dialog onCreateDialog(Bundle savedInstanceState) {
         FragmentActivity context = this.getActivity();
+        assert context != null;
         MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(context,
                 R.style.ThemeOverlay_MaterialComponents_Dialog_Alert)
                 .setTitle(this.mPreference.getDialogTitle())

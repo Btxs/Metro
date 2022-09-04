@@ -21,7 +21,6 @@ import androidx.fragment.app.FragmentActivity
 import io.github.muntashirakon.music.interfaces.ICabHolder
 import io.github.muntashirakon.music.model.Song
 import io.github.muntashirakon.music.util.MusicUtil
-import java.util.*
 
 class SimpleSongAdapter(
     context: FragmentActivity,
@@ -45,7 +44,6 @@ class SimpleSongAdapter(
         val trackAndTime = (if (fixedTrackNumber > 0) "$fixedTrackNumber | " else "") +
                 MusicUtil.getReadableDurationString(dataSet[position].duration)
 
-        holder.imageText?.visibility = View.GONE
         holder.time?.text = trackAndTime
         holder.text2?.text = dataSet[position].artistName
     }

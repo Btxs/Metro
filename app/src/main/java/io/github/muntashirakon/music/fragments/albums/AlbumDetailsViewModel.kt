@@ -14,16 +14,10 @@
  */
 package io.github.muntashirakon.music.fragments.albums
 
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.liveData
-import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.*
 import io.github.muntashirakon.music.interfaces.IMusicServiceEventListener
 import io.github.muntashirakon.music.model.Album
 import io.github.muntashirakon.music.model.Artist
-import io.github.muntashirakon.music.network.Result
-import io.github.muntashirakon.music.network.model.LastFmAlbum
 import io.github.muntashirakon.music.repository.RealRepository
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.launch
@@ -51,9 +45,9 @@ class AlbumDetailsViewModel(
         emit(artist)
     }
 
-    fun getAlbumInfo(album: Album): LiveData<Result<LastFmAlbum>> = liveData {
-        emit(Result.Loading)
-        emit(repository.albumInfo(album.artistName ?: "-", album.title ?: "-"))
+    fun getAlbumArtist(artistName: String): LiveData<Artist> = liveData(IO) {
+        val artist = repository.albumArtistByName(artistName)
+        emit(artist)
     }
 
     fun getMoreAlbums(artist: Artist): LiveData<List<Album>> = liveData(IO) {
@@ -73,4 +67,5 @@ class AlbumDetailsViewModel(
     override fun onPlayStateChanged() {}
     override fun onRepeatModeChanged() {}
     override fun onShuffleModeChanged() {}
+    override fun onFavoriteStateChanged() {}
 }

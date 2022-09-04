@@ -277,6 +277,7 @@ class MusicService : MediaBrowserServiceCompat(),
     private var wakeLock: WakeLock? = null
     private var notificationManager: NotificationManager? = null
     private var isForeground = false
+    private var audioVolumeObserver: AudioVolumeObserver? = null
     override fun onCreate() {
         super.onCreate()
         val telephonyManager = getSystemService<TelephonyManager>()
@@ -354,8 +355,8 @@ class MusicService : MediaBrowserServiceCompat(),
             .registerContentObserver(
                 MediaStore.Audio.Playlists.INTERNAL_CONTENT_URI, true, mediaStoreObserver
             )
-        val audioVolumeObserver = AudioVolumeObserver(this)
-        audioVolumeObserver.register(AudioManager.STREAM_MUSIC, this)
+//        val audioVolumeObserver = AudioVolumeObserver(this)
+        audioVolumeObserver?.register(AudioManager.STREAM_MUSIC, this)
         registerOnSharedPreferenceChangedListener(this)
         restoreState()
         sendBroadcast(Intent("code.name.monkey.retromusic.RETRO_MUSIC_SERVICE_CREATED"))
@@ -386,6 +387,9 @@ class MusicService : MediaBrowserServiceCompat(),
         releaseResources()
         contentResolver.unregisterContentObserver(mediaStoreObserver)
         unregisterOnSharedPreferenceChangedListener(this)
+        // add unregister audioVolumeObserver method to avoid memory leak
+//        val audioVolumeObserver = AudioVolumeObserver(this)
+        audioVolumeObserver?.unregister()
         wakeLock?.release()
         sendBroadcast(Intent("code.name.monkey.retromusic.RETRO_MUSIC_SERVICE_DESTROYED"))
     }
